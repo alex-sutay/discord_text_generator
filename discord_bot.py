@@ -7,27 +7,24 @@ import discord
 import re
 from config import TOKEN
 import numpy as np
-import scipy.io as sio
 from threading import Lock
-import json
-import predict_next
 
 client = discord.Client()
 global vocab
 global vocab_lock
-VOCAB_FILE = 'vocab.json'
-THETA_FILE = 'Theta_output.mat'
+SAVE_FILE = 'discord_data.txt'
 
 
 async def read_channel(message):
     await message.channel.send("Reading....")
-    messages = await message.channel.history(limit=10000).flatten()
+    messages = await message.channel.history(limit=100000).flatten()
     await message.channel.send(str(len(messages)))
     await message.channel.send("Analyzing...")
 
     master_str = ''
     words = {}
     for msg in messages:
+        """
         if not msg.author.bot:
             regex = re.compile('[^a-zA-Z ]')
             content = regex.sub('', msg.content)
@@ -39,13 +36,19 @@ async def read_channel(message):
                     words[word] += 1
                 else:
                     words[word] = 1
+                    """
+        master_str = msg.content + ' ' + master_str
 
     print(master_str)
+    with open(SAVE_FILE, 'a', encoding='utf-8') as f:
+        f.write(master_str)
 
-    sorted_words = {k: v for k, v in sorted(words.items(), key=lambda item: item[1])}
+    await message.channel.send("All done! Now I just gotta figure out what to say...")
+
+    """sorted_words = {k: v for k, v in sorted(words.items(), key=lambda item: item[1])}
     print(sorted_words)
     await message.channel.send("Top words: " + str(sorted_words)[-1500:])
-
+    "
     count = 1
     vocabulary = {'<OTHER>': 1}
     for word in sorted_words:
@@ -83,6 +86,7 @@ async def read_channel(message):
     outdict = {'X': outmatrix.astype(float)}
     sio.savemat('Out.mat', outdict)
     print('done')
+    """
 
 
 @client.event
@@ -92,32 +96,11 @@ async def on_ready():
     print(client.user.id)
 
 
-def load_vocab():
-    global vocab_lock
-    vocab_lock.acquire()
-    global vocab
-    vocab = {}
-    with open(VOCAB_FILE, 'r') as f:
-        vocab = json.load(f)
-    vocab_lock.release()
-
-
-async def save_vocab(new_vocab):
-    global vocab_lock
-    vocab_lock.acquire()
-    global vocab
-    vocab = new_vocab
-    with open(VOCAB_FILE, 'w') as f:
-        json.dump(vocab, f)
-    vocab_lock.release()
-
-
 async def wisdom(msg):
     """
     print out a response 19 words long
     :param msg:
     :return:
-    """
     global vocab_lock
     vocab_lock.acquire()
     global vocab
@@ -152,6 +135,7 @@ async def wisdom(msg):
 
     await msg.channel.send(final_msg)
     vocab_lock.release()
+    """
 
 
 CMDs = {
@@ -168,5 +152,5 @@ async def on_message(message):
 
 if __name__ == '__main__':
     vocab_lock = Lock()
-    load_vocab()
+    # load_vocab()
     client.run(TOKEN)
