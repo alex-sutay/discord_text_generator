@@ -148,7 +148,7 @@ def restore(model, restore_from, checkpoint_prefix):
 
 def train(model, dataset, epochs, starting_epoch=0):
     # Directory where the checkpoints will be saved
-    checkpoint_dir = './training_checkpoints_discord'
+    checkpoint_dir = './training_checkpoints_discord_2'
     # Name of the checkpoint files
     checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_{epoch}.ckpt")
 
@@ -175,13 +175,29 @@ def generate_text(one_step_model):
     print('\nRun time:', end - start)
 
 
+def generate_one_message(one_step_model):
+    start = time.time()
+    states = None
+    next_char = tf.constant(['How are you?'])
+    result = [next_char]
+
+    while next_char[0].numpy() != b'\x00':
+        next_char, states = one_step_model.generate_one_step(next_char, states=states)
+        result.append(next_char)
+
+    result = tf.strings.join(result)
+    end = time.time()
+    print(result[0].numpy().decode('utf-8'), '\n\n' + '_' * 80)
+    print('\nRun time:', end - start)
+
+
 if __name__ == '__main__':
     dataset, ids_from_chars, chars_from_ids = get_data('discord_data.txt')
     model = create_model(ids_from_chars)
-    restore(model, 8, os.path.join('./training_checkpoints_discord', "ckpt_{epoch}.ckpt"))
-    train(model, dataset, 20, 8)
+    # restore(model, 10, os.path.join('./training_checkpoints_discord_2', "ckpt_{epoch}.ckpt"))
+    train(model, dataset, 20)
     one_step_model = OneStep(model, chars_from_ids, ids_from_chars)
     generate_text(one_step_model)
     tf.saved_model.save(one_step_model, 'Current_model')
     one_step_model = tf.saved_model.load('Current_model')
-    generate_text(one_step_model)
+    generate_one_message(one_step_model)

@@ -17,7 +17,7 @@ SAVE_FILE = 'discord_data.txt'
 
 async def read_channel(message):
     await message.channel.send("Reading....")
-    messages = await message.channel.history(limit=100000).flatten()
+    messages = await message.channel.history(limit=50000).flatten()
     await message.channel.send(str(len(messages)))
     await message.channel.send("Analyzing...")
 
@@ -37,7 +37,7 @@ async def read_channel(message):
                 else:
                     words[word] = 1
                     """
-        master_str = msg.content + ' ' + master_str
+        master_str = msg.content + '\0' + master_str
 
     print(master_str)
     with open(SAVE_FILE, 'a', encoding='utf-8') as f:
