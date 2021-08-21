@@ -3,16 +3,21 @@ author: Alex Sutay
 file: betbot.py
 """
 
+# pip libraries
 import discord
-import re
-from config import TOKEN
-import numpy as np
+# python libraries
+import os
 from threading import Lock
+# my libraries
+from config import TOKEN
+import train
 
 client = discord.Client()
 global vocab
 global vocab_lock
-SAVE_FILE = 'discord_data.txt'
+global MODEL
+SAVE_FILE = 'discord_data.txt'  # where the training data is saved
+MAX_CHANNELS = 1  # how many channels are allowed in each discord server
 
 
 async def read_channel(message):
@@ -22,71 +27,14 @@ async def read_channel(message):
     await message.channel.send("Analyzing...")
 
     master_str = ''
-    words = {}
     for msg in messages:
-        """
-        if not msg.author.bot:
-            regex = re.compile('[^a-zA-Z ]')
-            content = regex.sub('', msg.content)
-            content = content.lower()
-            master_str = content + ' ' + master_str
-            split_data = content.split(' ')
-            for word in split_data:
-                if word in words:
-                    words[word] += 1
-                else:
-                    words[word] = 1
-                    """
-        master_str = msg.content + '\0' + master_str
+        master_str = msg.content + b'\x00' + master_str
 
     print(master_str)
     with open(SAVE_FILE, 'a', encoding='utf-8') as f:
         f.write(master_str)
 
     await message.channel.send("All done! Now I just gotta figure out what to say...")
-
-    """sorted_words = {k: v for k, v in sorted(words.items(), key=lambda item: item[1])}
-    print(sorted_words)
-    await message.channel.send("Top words: " + str(sorted_words)[-1500:])
-    "
-    count = 1
-    vocabulary = {'<OTHER>': 1}
-    for word in sorted_words:
-        if sorted_words[word] >= 5:
-            count += 1
-            vocabulary[word] = count
-
-    print(vocabulary)
-    print(len(vocabulary))
-    await save_vocab(vocabulary)
-
-    master_list = []
-    master_str = regex.sub('', master_str)
-    master_str = master_str.split(' ')
-    for word in master_str:
-        if word in vocabulary:
-            master_list.append(vocabulary[word])
-        else:
-            master_list.append(1)
-
-    print(master_list)
-
-    outmatrix = None
-    for row in range(len(master_str) - 20):
-        this_array = master_list[row:row + 20]
-        if outmatrix is None:
-            outmatrix = this_array
-        elif np.size(outmatrix) == 20:
-            outmatrix = np.asarray([outmatrix, this_array])
-        else:
-            outmatrix = np.vstack([outmatrix, this_array])
-
-    print(outmatrix)
-
-    outdict = {'X': outmatrix.astype(float)}
-    sio.savemat('Out.mat', outdict)
-    print('done')
-    """
 
 
 @client.event
@@ -97,45 +45,21 @@ async def on_ready():
 
 
 async def wisdom(msg):
-    """
-    print out a response 19 words long
-    :param msg:
-    :return:
-    global vocab_lock
-    vocab_lock.acquire()
-    global vocab
-    rev_vocab = {v: k for k, v in vocab.items()}
-    messages = await msg.channel.history(limit=30).flatten()
-    idx1 = 0
-    idx2 = 0
-    word_lst = []
-    while len(word_lst) < 19:
-        if idx2 == 0:
-            this_msg = messages[idx1]
-            idx1 += 1
-            while this_msg.author.bot:
-                this_msg = messages[idx1]
-                idx1 += 1
-            this_msg = this_msg.content.split(' ')
-            idx2 = len(this_msg)
-        else:
-            idx2 -= 1
-            if this_msg[idx2] in vocab:  # todo apply the regex to these strings
-                word_lst.append(vocab[this_msg[idx2]])
+    master_str = b'\x00'
+    messages = await msg.channel.history(limit=10).flatten()
+    for msg in messages:
+        if not msg.author.bot:
+            master_str = msg.content.encode('utf-8') + b'\x00' + master_str
+    response = train.generate_one_message(MODEL, master_str)[:-1]  # Chop the last character, it's a null
+    await msg.channel.send(response)
 
-    thetas = predict_next.thetas_from_mat(THETA_FILE)
-    final_msg = ''
-    for i in range(19):
-        next_word = predict_next.predict(thetas, np.asarray(word_lst))
-        print(next_word)
-        next_word = np.argmax(next_word) + 1
-        final_msg += rev_vocab[next_word] + ' '
-        word_lst.pop(0)
-        word_lst.append(next_word)
 
-    await msg.channel.send(final_msg)
-    vocab_lock.release()
-    """
+def load_model():
+    global MODEL
+    dataset, ids_from_chars, chars_from_ids = train.get_data('discord_data.txt')
+    model = train.create_model(ids_from_chars)
+    train.restore(model, 20, os.path.join('./training_checkpoints_discord_2', "ckpt_{epoch}.ckpt"))
+    MODEL = train.OneStep(model, chars_from_ids, ids_from_chars)
 
 
 CMDs = {
@@ -148,9 +72,14 @@ CMDs = {
 async def on_message(message):
     if message.content in CMDs:
         await CMDs[message.content](message)
+    if client.user in message.mentions:
+        await wisdom(message)  # if the bot is @-ed, respond
 
 
 if __name__ == '__main__':
     vocab_lock = Lock()
     # load_vocab()
+    print('loading model...')
+    load_model()
+    print('loaded! logging in')
     client.run(TOKEN)

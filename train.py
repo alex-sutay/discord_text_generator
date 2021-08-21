@@ -1,6 +1,5 @@
 import tensorflow as tf
 from tensorflow.keras.layers.experimental import preprocessing
-import numpy as np
 import os
 import time
 
@@ -175,11 +174,11 @@ def generate_text(one_step_model):
     print('\nRun time:', end - start)
 
 
-def generate_one_message(one_step_model):
+def generate_one_message(one_step_model, seed):
     start = time.time()
     states = None
-    next_char = tf.constant(['How are you?'])
-    result = [next_char]
+    next_char = tf.constant([seed])
+    result = []
 
     while next_char[0].numpy() != b'\x00':
         next_char, states = one_step_model.generate_one_step(next_char, states=states)
@@ -189,13 +188,14 @@ def generate_one_message(one_step_model):
     end = time.time()
     print(result[0].numpy().decode('utf-8'), '\n\n' + '_' * 80)
     print('\nRun time:', end - start)
+    return result[0].numpy().decode('utf-8')
 
 
 if __name__ == '__main__':
     dataset, ids_from_chars, chars_from_ids = get_data('discord_data.txt')
     model = create_model(ids_from_chars)
-    # restore(model, 10, os.path.join('./training_checkpoints_discord_2', "ckpt_{epoch}.ckpt"))
-    train(model, dataset, 20)
+    restore(model, 20, os.path.join('./training_checkpoints_discord_2', "ckpt_{epoch}.ckpt"))
+    # train(model, dataset, 20)
     one_step_model = OneStep(model, chars_from_ids, ids_from_chars)
     generate_text(one_step_model)
     tf.saved_model.save(one_step_model, 'Current_model')
